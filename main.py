@@ -10,6 +10,13 @@ import threading
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Load environment variables
+from dotenv import load_dotenv
+load_dotenv()
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+OWNER_ID = int(os.getenv("OWNER_ID"))  # Set owner ID in .env
+ADMIN_IDS = list(map(int, os.getenv("ADMIN_IDS", "").split(',')))  # Set admin IDs in .env (comma-separated)
+
 # Load or initialize data storage
 DATA_FILE = "posts.json"
 posts = {}  # Structure: {chat_id: {"drafts": [...], "scheduled": [...]}}
@@ -21,10 +28,16 @@ def save_data():
     with open(DATA_FILE, "w") as file:
         json.dump(posts, file, indent=4)
 
+def is_admin(update: Update):
+    return update.message.from_user.id in ADMIN_IDS or update.message.from_user.id == OWNER_ID
+
 def start(update: Update, context: CallbackContext):
     update.message.reply_text("Welcome! Use /newpost to create a post.")
 
 def new_post(update: Update, context: CallbackContext):
+    if not is_admin(update):
+        update.message.reply_text("You are not authorized to create posts.")
+        return
     chat_id = str(update.message.chat_id)
     if chat_id not in posts:
         posts[chat_id] = {"drafts": [], "scheduled": []}
@@ -33,6 +46,9 @@ def new_post(update: Update, context: CallbackContext):
     update.message.reply_text("New draft created! Use /editpost to modify it.")
 
 def edit_post(update: Update, context: CallbackContext):
+    if not is_admin(update):
+        update.message.reply_text("You are not authorized to edit posts.")
+        return
     chat_id = str(update.message.chat_id)
     if chat_id not in posts or not posts[chat_id]["drafts"]:
         update.message.reply_text("No drafts available.")
@@ -42,6 +58,9 @@ def edit_post(update: Update, context: CallbackContext):
     update.message.reply_text("Post updated! Use /schedule to schedule or /publish to send.")
 
 def schedule_post(update: Update, context: CallbackContext):
+    if not is_admin(update):
+        update.message.reply_text("You are not authorized to schedule posts.")
+        return
     chat_id = str(update.message.chat_id)
     if chat_id not in posts or not posts[chat_id]["drafts"]:
         update.message.reply_text("No drafts available.")
@@ -57,6 +76,9 @@ def schedule_post(update: Update, context: CallbackContext):
         update.message.reply_text("Usage: /schedule <minutes>")
 
 def publish_post(update: Update, context: CallbackContext):
+    if not is_admin(update):
+        update.message.reply_text("You are not authorized to publish posts.")
+        return
     chat_id = str(update.message.chat_id)
     if chat_id not in posts or not posts[chat_id]["drafts"]:
         update.message.reply_text("No drafts available.")
@@ -77,12 +99,6 @@ def check_scheduled():
         time.sleep(60)
 
 if __name__ == "__main__":
-    from dotenv import load_dotenv
-    import time
-
-    load_dotenv()
-    BOT_TOKEN = os.getenv("BOT_TOKEN")
-    
     updater = Updater(BOT_TOKEN, use_context=True)
     dp = updater.dispatcher
     
@@ -96,22 +112,4 @@ if __name__ == "__main__":
     
     updater.start_polling()
     updater.idle()
-
-# requirements.txt
-# python-telegram-bot==13.15
-# python-dotenv==1.0.0
-
-# Dockerfile
-# FROM python:3.9
-# WORKDIR /bot
-# COPY . /bot
-# RUN pip install -r requirements.txt
-# CMD ["python", "main.py"]
-
-# README.md
-# # Telegram Post Bot
-# This bot allows admins to create, schedule, and publish posts with buttons.
-# ## Setup
-# - Add your Telegram bot token in a `.env` file as `BOT_TOKEN=your_token_here`
-# - Run `docker build -t telegram-post-bot .`
-# - Deploy to Koyeb with `docker run -d telegram-post-bot`
+    
